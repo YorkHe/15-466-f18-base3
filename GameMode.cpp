@@ -130,6 +130,10 @@ Load < GLuint > stone_spec_tex(LoadTagDefault, [](){
 	return new GLuint(load_texture(data_path("textures/stone_blocks_spec.png")));
 });
 
+Load < GLuint > ground_tex(LoadTagDefault, [](){
+	return new GLuint(load_texture(data_path("textures/ground.png")));
+});
+
 Load< GLuint > white_tex(LoadTagDefault, [](){
 	GLuint tex = 0;
 	glGenTextures(1, &tex);
@@ -150,6 +154,7 @@ Scene::Transform *camera_parent_transform = nullptr;
 Scene::Camera *camera = nullptr;
 Scene::Transform *spot_parent_transform = nullptr;
 Scene::Lamp *spot = nullptr;
+std::vector<Scene::Lamp*> spot_lights;
 
 Load< Scene > scene(LoadTagDefault, [](){
 	Scene *ret = new Scene;
@@ -175,8 +180,10 @@ Load< Scene > scene(LoadTagDefault, [](){
 
 		obj->programs[Scene::Object::ProgramTypeDefault] = texture_program_info;
 		if (t->name == "Wall") {
-			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *wood_tex;
-		} else {
+			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *stone_spec_tex;
+//		} else if (t->name == "Floor") {
+//			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *ground_tex;
+		}else{
 			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *white_tex;
 		}
 
@@ -206,6 +213,10 @@ Load< Scene > scene(LoadTagDefault, [](){
 	for (Scene::Lamp *l = ret->first_lamp; l != nullptr; l = l->alloc_next) {
 		if (l->transform->name == "Lamp") {
 			spot = l;
+			spot_lights.push_back(l);
+		}
+		if (l->transform->name == "SpotLight") {
+		    spot_lights.push_back(l);
 		}
 	}
 	if (!spot) throw std::runtime_error("No 'Spot' spotlight in scene.");
@@ -293,8 +304,6 @@ bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 						glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f))
 		);
 
-
-
 		return true;
 	}
 
@@ -315,13 +324,10 @@ void GameMode::update(float elapsed) {
 
 	if (step != glm::vec3(0.0f)) {
 		walk_mesh->walk(walk_point, step);
-		std::cerr << "step" << step.x << "," << step.y << "," << step.z << std::endl;
 
 		auto normal = walk_mesh->world_normal(walk_point);
 		auto position = walk_mesh->world_point(walk_point) + 1.0f * normal;
 
-		std::cerr << "WalkPoint" << walk_point.triangle.x << "," << walk_point.triangle.y << "," << walk_point.triangle.z << std::endl;
-		std::cerr << "position" << position.x << "," << position.y << "," << position.z << std::endl;
 		camera->transform->position.x = position.x;
 		camera->transform->position.y = position.y;
 		camera->transform->position.z = position.z;
@@ -462,28 +468,65 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 	//use hemisphere light for subtle ambient light:
 	glUniform3fv(texture_program->sky_color_vec3, 1, glm::value_ptr(glm::vec3(0.2f, 0.2f, 0.3f)));
 	glUniform3fv(texture_program->sky_direction_vec3, 1, glm::value_ptr(glm::vec3(0.0f, 0.0f, 1.0f)));
+//
+//	{
+//	    Scene::Lamp* spot = spot_lights[0];
+//		glm::mat4 world_to_spot =
+//				//This matrix converts from the spotlight's clip space ([-1,1]^3) into depth map texture coordinates ([0,1]^2) and depth map Z values ([0,1]):
+//				glm::mat4(
+//						0.5f, 0.0f, 0.0f, 0.0f,
+//						0.0f, 0.5f, 0.0f, 0.0f,
+//						0.0f, 0.0f, 0.5f, 0.0f,
+//						0.5f, 0.5f, 0.5f + 0.00001f /* <-- bias */, 1.0f
+//				)
+//				//this is the world-to-clip matrix used when rendering the shadow map:
+//				* spot->make_projection() * spot->transform->make_world_to_local();
+//
+//		glUniformMatrix4fv(texture_program->light_to_spot_mat4, 1, GL_FALSE, glm::value_ptr(world_to_spot));
+//
+//		glm::mat4 spot_to_world = spot->transform->make_local_to_world();
+//		std::string position_name = "spot_positions[0]";
+//		GLint spot_potision = glGetUniformLocation(texture_program->program, position_name.c_str());
+//		glUniform3fv(spot_potision, 1, glm::value_ptr(glm::vec3(spot_to_world[3])));
+//		glUniform3fv(texture_program->spot_direction_vec3, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
+//		glUniform3fv(texture_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
+//
+//		glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
+//		glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
+//	}
 
-	glm::mat4 world_to_spot =
-		//This matrix converts from the spotlight's clip space ([-1,1]^3) into depth map texture coordinates ([0,1]^2) and depth map Z values ([0,1]):
-		glm::mat4(
-			0.5f, 0.0f, 0.0f, 0.0f,
-			0.0f, 0.5f, 0.0f, 0.0f,
-			0.0f, 0.0f, 0.5f, 0.0f,
-			0.5f, 0.5f, 0.5f+0.00001f /* <-- bias */, 1.0f
-		)
-		//this is the world-to-clip matrix used when rendering the shadow map:
-		* spot->make_projection() * spot->transform->make_world_to_local();
+	{
+	    for (int i = 0; i < 2; i++) {
+	    	Scene::Lamp* spot = spot_lights[i];
+			glm::mat4 world_to_spot =
+							  //This matrix converts from the spotlight's clip space ([-1,1]^3) into depth map texture coordinates ([0,1]^2) and depth map Z values ([0,1]):
+							  glm::mat4(
+									  0.5f, 0.0f, 0.0f, 0.0f,
+									  0.0f, 0.5f, 0.0f, 0.0f,
+									  0.0f, 0.0f, 0.5f, 0.0f,
+									  0.5f, 0.5f, 0.5f + 0.00001f /* <-- bias */, 1.0f
+							  )
+							  //this is the world-to-clip matrix used when rendering the shadow map:
+							  * spot->make_projection() * spot->transform->make_world_to_local();
 
-	glUniformMatrix4fv(texture_program->light_to_spot_mat4, 1, GL_FALSE, glm::value_ptr(world_to_spot));
+			std::string light_to_spot_name= "light_to_spots[" + std::to_string(i) + "]";
+			GLint light_to_spot_position = glGetUniformLocation(texture_program->program, light_to_spot_name.c_str());
 
-	glm::mat4 spot_to_world = spot->transform->make_local_to_world();
-	glUniform3fv(texture_program->spot_position_vec3, 1, glm::value_ptr(glm::vec3(spot_to_world[3])));
-	glUniform3fv(texture_program->spot_direction_vec3, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
-	glUniform3fv(texture_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
+			glUniformMatrix4fv(light_to_spot_position, 1, GL_FALSE, glm::value_ptr(world_to_spot));
 
-	glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
-	glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
+			glm::mat4 spot_to_world = spot->transform->make_local_to_world();
+			std::string position_name = "spot_positions[" + std::to_string(i) + "]";
+			std::string direction_name = "spot_directions[" + std::to_string(i) + "]";
+			GLint spot_potision = glGetUniformLocation(texture_program->program, position_name.c_str());
+			GLint spot_direction= glGetUniformLocation(texture_program->program, direction_name.c_str());
+			glUniform3fv(spot_potision, 1, glm::value_ptr(glm::vec3(spot_to_world[3])));
+			glUniform3fv(spot_direction, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
+			glUniform3fv(texture_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
 
+			glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
+			glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
+		}
+	}
 	glUniform3fv(texture_program->camera_position_vec3, 1, glm::value_ptr(camera->transform->position));
 
 	//This code binds texture index 1 to the shadow map:

@@ -9,7 +9,8 @@ TextureProgram::TextureProgram() {
 		"uniform mat4 object_to_clip;\n"
 		"uniform mat4x3 object_to_light;\n"
 		"uniform mat3 normal_to_light;\n"
-		"uniform mat4 light_to_spot;\n"
+		"uniform mat4 light_to_spots[2];\n"
+        "uniform mat4 light_to_spot;\n"
 		"layout(location=0) in vec4 Position;\n" //note: layout keyword used to make sure that the location-0 attribute is always bound to something
 		"in vec3 Normal;\n"
 		"in vec4 Color;\n"
@@ -18,11 +19,14 @@ TextureProgram::TextureProgram() {
 		"out vec3 normal;\n"
 		"out vec4 color;\n"
 		"out vec2 texCoord;\n"
-		"out vec4 spotPosition;\n"
+		"out vec4 spotPositions[2];\n"
+        "out vec4 spotPosition;\n"
 		"void main() {\n"
 		"	gl_Position = object_to_clip * Position;\n"
 		"	position = object_to_light * Position;\n"
-		"	spotPosition = light_to_spot * vec4(position, 1.0);\n"
+        "   for (int i = 0; i < 2; i++) {\n"
+		"	    spotPositions[i] = light_to_spots[i] * vec4(position, 1.0);\n"
+		"   }\n"
 		"	normal = normal_to_light * Normal;\n"
 		"	color = Color;\n"
 		"	texCoord = TexCoord;\n"
@@ -33,8 +37,10 @@ TextureProgram::TextureProgram() {
 		"uniform vec3 sun_color;\n"
 		"uniform vec3 sky_direction;\n"
 		"uniform vec3 sky_color;\n"
-		"uniform vec3 spot_position;\n"
-		"uniform vec3 spot_direction;\n"
+        "uniform vec3 spot_position;\n"
+        "uniform vec3 spot_direction;\n"
+		"uniform vec3 spot_positions[2];\n"
+		"uniform vec3 spot_directions[2];\n"
 		"uniform vec3 spot_color;\n"
 		"uniform vec2 spot_outer_inner;\n"
 		"uniform vec3 camera_position;\n"
@@ -44,7 +50,8 @@ TextureProgram::TextureProgram() {
 		"in vec3 normal;\n"
 		"in vec4 color;\n"
 		"in vec2 texCoord;\n"
-		"in vec4 spotPosition;\n"
+		"in vec4 spotPositions[2];\n"
+        "in vec4 spotPosition;\n"
 		"out vec4 fragColor;\n"
 		"void main() {\n"
 		"	vec3 total_light = vec3(0.0, 0.0, 0.0);\n"
@@ -59,18 +66,18 @@ TextureProgram::TextureProgram() {
 		"		float nl = max(0.0, dot(n,l));\n"
 		"		total_light += nl * sun_color;\n"
 		"	}\n"
+        "   for (int i = 0; i < 2; i++) \n"
 		"	{ //spot (point with fov + shadow map) light:\n"
-		"		vec3 l = normalize(spot_position - position);\n"
+		"		vec3 l = normalize(spot_positions[i] - position);\n"
 		"		float nl = max(0.0, dot(n,l));\n"
 		"		//TODO: look up shadow map\n"
-		"		float d = dot(l,-spot_direction);\n"
+		"		float d = dot(l,-spot_directions[i]);\n"
 		"		float amt = smoothstep(spot_outer_inner.x, spot_outer_inner.y, d);\n"
-		"		float shadow = textureProj(spot_depth_tex, spotPosition);\n"
-		"		total_light += shadow * nl * amt * spot_color;\n"
+		"		//float shadow = textureProj(spot_depth_tex, spotPositions[i]);\n"
+		"		total_light += nl * amt * spot_color;\n"
 		//"		fragColor = vec4(s,s,s, 1.0);\n" //DEBUG: just show shadow
 		"	}\n"
-
-		"vec3 new_color = mix(color.rgb, vec3(0.0, 0.0, 0.0), 0.13 * length(camera_position - position));\n"
+		"   vec3 new_color = mix(color.rgb, vec3(0.0, 0.0, 0.0), 0.13 * length(camera_position - position));\n"
 		"	fragColor = texture(tex, texCoord) * vec4(new_color * total_light, color.a);\n"
 		"}\n"
 	);
@@ -88,6 +95,11 @@ TextureProgram::TextureProgram() {
 	spot_direction_vec3 = glGetUniformLocation(program, "spot_direction");
 	spot_color_vec3 = glGetUniformLocation(program, "spot_color");
 	spot_outer_inner_vec2 = glGetUniformLocation(program, "spot_outer_inner");
+
+	spot_position2_vec3 = glGetUniformLocation(program, "spot_position2");
+	spot_direction2_vec3 = glGetUniformLocation(program, "spot_direction2");
+	light_to_spot2_mat4 = glGetUniformLocation(program, "light_to_spot2");
+
 
 	light_to_spot_mat4 = glGetUniformLocation(program, "light_to_spot");
 

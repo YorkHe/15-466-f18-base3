@@ -22,6 +22,11 @@ struct TextureProgram {
 	GLuint spot_outer_inner_vec2 = -1U; //color fades from zero to one as dot(spot_direction, spot_to_position) varies from outer_inner.x to outer_inner.y
 	GLuint light_to_spot_mat4 = -1U; //projects from lighting space (/world space) to spot light depth map space
 
+
+	GLuint spot_position2_vec3 = -1U;
+	GLuint spot_direction2_vec3 = -1U; //direction *from* spotlight
+	GLuint light_to_spot2_mat4 = -1U; //projects from lighting space (/world space) to spot light depth map space
+
 	GLuint camera_position_vec3 = -1U;
 
 	//textures:
