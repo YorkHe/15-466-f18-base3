@@ -37,6 +37,7 @@ TextureProgram::TextureProgram() {
 		"uniform vec3 spot_direction;\n"
 		"uniform vec3 spot_color;\n"
 		"uniform vec2 spot_outer_inner;\n"
+		"uniform vec3 camera_position;\n"
 		"uniform sampler2D tex;\n"
 		"uniform sampler2DShadow spot_depth_tex;\n"
 		"in vec3 position;\n"
@@ -69,7 +70,8 @@ TextureProgram::TextureProgram() {
 		//"		fragColor = vec4(s,s,s, 1.0);\n" //DEBUG: just show shadow
 		"	}\n"
 
-		"	fragColor = texture(tex, texCoord) * vec4(color.rgb * total_light, color.a);\n"
+		"vec3 new_color = mix(color.rgb, vec3(0.0, 0.0, 0.0), 0.13 * length(camera_position - position));\n"
+		"	fragColor = texture(tex, texCoord) * vec4(new_color * total_light, color.a);\n"
 		"}\n"
 	);
 
@@ -88,6 +90,8 @@ TextureProgram::TextureProgram() {
 	spot_outer_inner_vec2 = glGetUniformLocation(program, "spot_outer_inner");
 
 	light_to_spot_mat4 = glGetUniformLocation(program, "light_to_spot");
+
+	camera_position_vec3 = glGetUniformLocation(program, "camera_position");
 
 	glUseProgram(program);
 

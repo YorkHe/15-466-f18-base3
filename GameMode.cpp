@@ -216,6 +216,13 @@ Load< Scene > scene(LoadTagDefault, [](){
 
 GameMode::GameMode() {
 	std::cerr << "START" << std::endl;
+
+	this->walk_mesh = new WalkMesh(data_path("maze.w"));
+	walk_point = this->walk_mesh->start(glm::vec3(-20.0f, -20.0f, 1.5f));
+
+	auto position = walk_mesh->world_point(walk_point);
+	std::cerr << "WalkPoint" << walk_point.triangle.x << "," << walk_point.triangle.y << "," << walk_point.triangle.z << std::endl;
+	std::cerr << "position" << position.x << "," << position.y << "," << position.z << std::endl;
 }
 
 GameMode::~GameMode() {
@@ -267,11 +274,26 @@ bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		yaw = -yaw;
 		pitch = -pitch;
 
+
+		//update camera elevation:
+		const constexpr float PitchLimit = 90.0f / 180.0f * 3.1415926f;
+		elevation = glm::clamp(elevation + pitch, -PitchLimit, PitchLimit);
+//		camera->transform->rotation = glm::angleAxis(elevation + 0.5f * 3.1515926f, glm::vec3(1.0f, 0.0f, 0.0f));
+
+//		//update player forward direction by rotation around 'up' direction:
+//		glm::vec3 up = walk_mesh->world_normal(walk_point);
+//		camera->transform->rotation = glm::normalize(
+//				glm::angleAxis(yaw, up)
+//				* camera->transform->rotation
+//		);
+
 		camera->transform->rotation = glm::normalize(
-				camera->transform->rotation
-				*glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f))
-				*glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f))
+                camera->transform->rotation *
+				glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f))*
+						glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f))
 		);
+
+
 
 		return true;
 	}
@@ -291,7 +313,23 @@ void GameMode::update(float elapsed) {
 	if (controls.backward) step = amt * directions[2];
 	if (controls.forward) step = -amt * directions[2];
 
-	camera->transform->position += step;
+	if (step != glm::vec3(0.0f)) {
+		walk_mesh->walk(walk_point, step);
+		std::cerr << "step" << step.x << "," << step.y << "," << step.z << std::endl;
+
+		auto normal = walk_mesh->world_normal(walk_point);
+		auto position = walk_mesh->world_point(walk_point) + 1.0f * normal;
+
+		std::cerr << "WalkPoint" << walk_point.triangle.x << "," << walk_point.triangle.y << "," << walk_point.triangle.z << std::endl;
+		std::cerr << "position" << position.x << "," << position.y << "," << position.z << std::endl;
+		camera->transform->position.x = position.x;
+		camera->transform->position.y = position.y;
+		camera->transform->position.z = position.z;
+	}
+	spot->transform->rotation = camera->transform->rotation;
+	spot->transform->position.x = camera->transform->position.x;
+	spot->transform->position.y = camera->transform->position.y;
+	spot->transform->position.z = camera->transform->position.z - 0.5f;
 }
 
 //GameMode will render to some offscreen framebuffer(s).
@@ -445,6 +483,8 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 
 	glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
 	glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
+
+	glUniform3fv(texture_program->camera_position_vec3, 1, glm::value_ptr(camera->transform->position));
 
 	//This code binds texture index 1 to the shadow map:
 	// (note that this is a bit brittle -- it depends on none of the objects in the scene having a texture of index 1 set in their material data; otherwise scene::draw would unbind this texture):

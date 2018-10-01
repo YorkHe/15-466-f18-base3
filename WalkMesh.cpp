@@ -144,8 +144,10 @@ glm::vec3 calculate_barycentric_coord(glm::vec3 vertex_a, glm::vec3 vertex_b, gl
 
 WalkMesh::WalkPoint WalkMesh::start(glm::vec3 const &world_point) const {
 	WalkPoint closest;
+	std::cerr << "WALK MESH START:" << world_point.x << "," << world_point.y << "," << world_point.z << std::endl;
 
 	float min_distance = MAXFLOAT;
+	std::cerr << "TRIANGLE SIZE" << this->triangles.size() << std::endl;
 	for (auto &triangle : this->triangles) {
 
 		const glm::vec3 &vertex_a = this->vertices[triangle[0]];
@@ -153,6 +155,8 @@ WalkMesh::WalkPoint WalkMesh::start(glm::vec3 const &world_point) const {
 		const glm::vec3 &vertex_c = this->vertices[triangle[2]];
 
 	    glm::vec3 closest_point = closestPointOnTriangle(vertex_a, vertex_b, vertex_c, world_point);
+		std::cerr << "Vertex A:" << vertex_a.x << "," << vertex_a.y << "," << vertex_a.z << std::endl;
+		std::cerr << "WALK MESH Closest:" << closest_point.x << "," << closest_point.y << "," << closest_point.z << std::endl;
 
 	    float distance = glm::distance(closest_point, world_point);
 

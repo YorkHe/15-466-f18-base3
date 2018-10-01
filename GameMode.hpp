@@ -2,6 +2,7 @@
 
 #include "Mode.hpp"
 
+#include "WalkMesh.hpp"
 #include "MeshBuffer.hpp"
 #include "GL.hpp"
 
@@ -39,5 +40,9 @@ struct GameMode : public Mode {
 	} controls;
 
 	bool mouse_captured = true;
+	WalkMesh* walk_mesh;
+	WalkMesh::WalkPoint walk_point;
+
+	float elevation = 0.0f;
 
 };
