@@ -14,8 +14,9 @@ DIST=../dist
 
 all : \
 	$(DIST)/menu.p \
-	$(DIST)/vignette.pnct \
-	$(DIST)/vignette.scene \
+	$(DIST)/maze.pnct \
+	$(DIST)/maze.scene \
+	$(DIST)/maze.w \
 
 
 $(DIST)/%.p : %.blend export-meshes.py
@@ -30,5 +31,5 @@ $(DIST)/%.pnct : %.blend export-meshes.py
 $(DIST)/%.scene : %.blend export-scene.py
 	$(BLENDER) --background --python export-scene.py -- '$<' '$@'
 
-$(DIST)/phone-bank.w : phone-bank.blend export-walkmeshes.py
-	$(BLENDER) --background --python export-walkmeshes.py -- '$<':3 '$@'
+$(DIST)/%.w : %.blend export-walkmeshes.py
+	$(BLENDER) --background --python export-walkmeshes.py -- '$<':2 '$@'

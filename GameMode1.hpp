@@ -30,14 +30,4 @@ struct GameMode : public Mode {
 
 	float camera_spin = 0.0f;
 	float spot_spin = 0.0f;
-
-	struct {
-		bool forward = false;
-		bool backward = false;
-		bool left = false;
-		bool right = false;
-	} controls;
-
-	bool mouse_captured = true;
-
 };

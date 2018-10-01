@@ -2,6 +2,7 @@
 
 #include "GL.hpp"
 #include <stdexcept>
+#include <string>
 
 inline void check_fb() {
 	GLenum status = glCheckFramebufferStatus(GL_FRAMEBUFFER);

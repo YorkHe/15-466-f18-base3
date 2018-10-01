@@ -22,11 +22,9 @@
 #include <cstddef>
 #include <random>
 
-#include <iostream>
-
 
 Load< MeshBuffer > meshes(LoadTagDefault, [](){
-	return new MeshBuffer(data_path("maze.pnct"));
+	return new MeshBuffer(data_path("vignette.pnct"));
 });
 
 Load< GLuint > meshes_for_texture_program(LoadTagDefault, [](){
@@ -122,14 +120,6 @@ Load< GLuint > marble_tex(LoadTagDefault, [](){
 	return new GLuint(load_texture(data_path("textures/marble.png")));
 });
 
-Load< GLuint > stone_bump_tex(LoadTagDefault, [](){
-	return new GLuint(load_texture(data_path("textures/stone_blocks_bump.png")));
-});
-
-Load < GLuint > stone_spec_tex(LoadTagDefault, [](){
-	return new GLuint(load_texture(data_path("textures/stone_blocks_spec.png")));
-});
-
 Load< GLuint > white_tex(LoadTagDefault, [](){
 	GLuint tex = 0;
 	glGenTextures(1, &tex);
@@ -169,13 +159,14 @@ Load< Scene > scene(LoadTagDefault, [](){
 
 
 	//load transform hierarchy:
-	ret->load(data_path("maze.scene"), [&](Scene &s, Scene::Transform *t, std::string const &m){
+	ret->load(data_path("vignette.scene"), [&](Scene &s, Scene::Transform *t, std::string const &m){
 		Scene::Object *obj = s.new_object(t);
-		std::cerr << "Loading: " << m << std::endl;
 
 		obj->programs[Scene::Object::ProgramTypeDefault] = texture_program_info;
-		if (t->name == "Wall") {
+		if (t->name == "Platform") {
 			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *wood_tex;
+		} else if (t->name == "Pedestal") {
+			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *marble_tex;
 		} else {
 			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *white_tex;
 		}
@@ -190,7 +181,20 @@ Load< Scene > scene(LoadTagDefault, [](){
 		obj->programs[Scene::Object::ProgramTypeShadow].count = mesh.count;
 	});
 
-	std::cerr << "Finish loading" << std::endl;
+	//look up camera parent transform:
+	for (Scene::Transform *t = ret->first_transform; t != nullptr; t = t->alloc_next) {
+		if (t->name == "CameraParent") {
+			if (camera_parent_transform) throw std::runtime_error("Multiple 'CameraParent' transforms in scene.");
+			camera_parent_transform = t;
+		}
+		if (t->name == "SpotParent") {
+			if (spot_parent_transform) throw std::runtime_error("Multiple 'SpotParent' transforms in scene.");
+			spot_parent_transform = t;
+		}
+
+	}
+	if (!camera_parent_transform) throw std::runtime_error("No 'CameraParent' transform in scene.");
+	if (!spot_parent_transform) throw std::runtime_error("No 'SpotParent' transform in scene.");
 
 	//look up the camera:
 	for (Scene::Camera *c = ret->first_camera; c != nullptr; c = c->alloc_next) {
@@ -201,21 +205,20 @@ Load< Scene > scene(LoadTagDefault, [](){
 	}
 	if (!camera) throw std::runtime_error("No 'Camera' camera in scene.");
 
-    std::cerr << "Finish Camera" << std::endl;
 	//look up the spotlight:
 	for (Scene::Lamp *l = ret->first_lamp; l != nullptr; l = l->alloc_next) {
-		if (l->transform->name == "Lamp") {
+		if (l->transform->name == "Spot") {
+			if (spot) throw std::runtime_error("Multiple 'Spot' objects in scene.");
+			if (l->type != Scene::Lamp::Spot) throw std::runtime_error("Lamp 'Spot' is not a spotlight.");
 			spot = l;
 		}
 	}
 	if (!spot) throw std::runtime_error("No 'Spot' spotlight in scene.");
 
-	std::cerr << "Finish Light" << std::endl;
 	return ret;
 });
 
 GameMode::GameMode() {
-	std::cerr << "START" << std::endl;
 }
 
 GameMode::~GameMode() {
@@ -227,71 +230,24 @@ bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 		return false;
 	}
 
-	if (evt.type == SDL_KEYDOWN || evt.type == SDL_KEYUP) {
-		if (evt.key.keysym.scancode == SDL_SCANCODE_W) {
-			controls.forward = (evt.type == SDL_KEYDOWN);
-			return true;
-		}
-
-		if (evt.key.keysym.scancode == SDL_SCANCODE_S) {
-			controls.backward = (evt.type == SDL_KEYDOWN);
-			return true;
-		}
-
-		if (evt.key.keysym.scancode == SDL_SCANCODE_A) {
-			controls.left = (evt.type == SDL_KEYDOWN);
-			return true;
-		}
-
-		if (evt.key.keysym.scancode == SDL_SCANCODE_D) {
-			controls.right = (evt.type == SDL_KEYDOWN);
-			return true;
-		}
-	}
-
-	if (evt.type == SDL_KEYDOWN) {
-		if (evt.key.keysym.scancode == SDL_SCANCODE_SPACE) {
-			mouse_captured = !mouse_captured;
-			if(mouse_captured) {
-				SDL_SetRelativeMouseMode(SDL_TRUE);
-			} else {
-				SDL_SetRelativeMouseMode(SDL_FALSE);
-			}
-		}
-	}
-
 	if (evt.type == SDL_MOUSEMOTION) {
-		float yaw = evt.motion.xrel / float(window_size.y) * camera->fovy;
-		float pitch = evt.motion.yrel / float(window_size.y) * camera->fovy;
+		if (evt.motion.state & SDL_BUTTON(SDL_BUTTON_LEFT)) {
+			camera_spin += 5.0f * evt.motion.xrel / float(window_size.x);
+			return true;
+		}
+		if (evt.motion.state & SDL_BUTTON(SDL_BUTTON_RIGHT)) {
+			spot_spin += 5.0f * evt.motion.xrel / float(window_size.x);
+			return true;
+		}
 
-		yaw = -yaw;
-		pitch = -pitch;
-
-		camera->transform->rotation = glm::normalize(
-				camera->transform->rotation
-				*glm::angleAxis(yaw, glm::vec3(0.0f, 1.0f, 0.0f))
-				*glm::angleAxis(pitch, glm::vec3(1.0f, 0.0f, 0.0f))
-		);
-
-		return true;
 	}
 
 	return false;
 }
 
 void GameMode::update(float elapsed) {
-    glm::mat3 directions = glm::mat3_cast(camera->transform->rotation);
-
-    float amt = 5.0f * elapsed;
-
-    glm::vec3 step = glm::vec3(0.0f);
-
-	if (controls.right) step = amt * directions[0];
-	if (controls.left) step = -amt * directions[0];
-	if (controls.backward) step = amt * directions[2];
-	if (controls.forward) step = -amt * directions[2];
-
-	camera->transform->position += step;
+	camera_parent_transform->rotation = glm::angleAxis(camera_spin, glm::vec3(0.0f, 0.0f, 1.0f));
+	spot_parent_transform->rotation = glm::angleAxis(spot_spin, glm::vec3(0.0f, 0.0f, 1.0f));
 }
 
 //GameMode will render to some offscreen framebuffer(s).
