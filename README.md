@@ -15,7 +15,7 @@ How To Play:
 
 Use W/A/S/D to move. You can do nothing but run. 
 
-> Run, You Fools! 
+> Fly, You Fools! 
 
 And yes, you have to dodge the spiders, but the spot lights are your friends. 
 
@@ -25,7 +25,7 @@ I changed the game to be a first-person-running game. I was planning to add more
 
 Good / Bad / Ugly Code:
 
-The light arrays are kinds of ugly. I can't declare a variable-length array in shader program, so the (maximum) number of light source in the scene has to be fixed.  
+The light arrays are kinds of ugly. I can't declare a variable-length array in shader program, so the (maximum) number of light sources in the scene has to be fixed.  
 
 # Changes In This Base Code
 
