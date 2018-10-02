@@ -14,6 +14,8 @@
 #include "texture_program.hpp"
 #include "depth_program.hpp"
 
+#include "Spider.h"
+
 #include <glm/gtc/type_ptr.hpp>
 
 #include <iostream>
@@ -21,6 +23,7 @@
 #include <map>
 #include <cstddef>
 #include <random>
+#include <cstring>
 
 #include <iostream>
 
@@ -130,8 +133,8 @@ Load < GLuint > stone_spec_tex(LoadTagDefault, [](){
 	return new GLuint(load_texture(data_path("textures/stone_blocks_spec.png")));
 });
 
-Load < GLuint > ground_tex(LoadTagDefault, [](){
-	return new GLuint(load_texture(data_path("textures/ground.png")));
+Load < GLuint > spider_tex(LoadTagDefault, [](){
+	return new GLuint(load_texture(data_path("textures/spider.png")));
 });
 
 Load< GLuint > white_tex(LoadTagDefault, [](){
@@ -155,6 +158,9 @@ Scene::Camera *camera = nullptr;
 Scene::Transform *spot_parent_transform = nullptr;
 Scene::Lamp *spot = nullptr;
 std::vector<Scene::Lamp*> spot_lights;
+std::vector<Spider*> spiders;
+
+Scene::Transform* statue = nullptr;
 
 Load< Scene > scene(LoadTagDefault, [](){
 	Scene *ret = new Scene;
@@ -181,9 +187,14 @@ Load< Scene > scene(LoadTagDefault, [](){
 		obj->programs[Scene::Object::ProgramTypeDefault] = texture_program_info;
 		if (t->name == "Wall") {
 			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *stone_spec_tex;
-//		} else if (t->name == "Floor") {
-//			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *ground_tex;
-		}else{
+		} else if (std::strstr(t->name.c_str(), "Spider") != NULL) {
+			spiders.push_back(new Spider(t));
+			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *spider_tex;
+		}else if (t->name == "Suzanne") {
+			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *marble_tex;
+			statue = t;
+		}
+		else{
 			obj->programs[Scene::Object::ProgramTypeDefault].textures[0] = *white_tex;
 		}
 
@@ -215,7 +226,7 @@ Load< Scene > scene(LoadTagDefault, [](){
 			spot = l;
 			spot_lights.push_back(l);
 		}
-		if (l->transform->name == "SpotLight") {
+		if (std::strstr(l->transform->name.c_str(), "SpotLight") != NULL) {
 		    spot_lights.push_back(l);
 		}
 	}
@@ -242,6 +253,11 @@ GameMode::~GameMode() {
 bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size) {
 	//ignore any keys that are the result of automatic key repeat:
 	if (evt.type == SDL_KEYDOWN && evt.key.repeat) {
+		return false;
+	}
+
+	if (game_over || win) {
+		SDL_SetRelativeMouseMode(SDL_FALSE);
 		return false;
 	}
 
@@ -287,8 +303,6 @@ bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 
 
 		//update camera elevation:
-		const constexpr float PitchLimit = 90.0f / 180.0f * 3.1415926f;
-		elevation = glm::clamp(elevation + pitch, -PitchLimit, PitchLimit);
 //		camera->transform->rotation = glm::angleAxis(elevation + 0.5f * 3.1515926f, glm::vec3(1.0f, 0.0f, 0.0f));
 
 //		//update player forward direction by rotation around 'up' direction:
@@ -311,6 +325,8 @@ bool GameMode::handle_event(SDL_Event const &evt, glm::uvec2 const &window_size)
 }
 
 void GameMode::update(float elapsed) {
+	if (game_over || win) return;
+
     glm::mat3 directions = glm::mat3_cast(camera->transform->rotation);
 
     float amt = 5.0f * elapsed;
@@ -332,10 +348,52 @@ void GameMode::update(float elapsed) {
 		camera->transform->position.y = position.y;
 		camera->transform->position.z = position.z;
 	}
+
+	auto normal = walk_mesh->world_normal(walk_point);
+	glm::vec3 player_right = directions[0];
+	glm::vec3 old_player_up = glm::normalize(directions[1]);
+	glm::vec3 player_forward = -directions[2];
+
+	glm::vec3 w = glm::cross(old_player_up, normal);
+
+	glm::quat orientation_change= glm::normalize(
+			glm::quat(
+					glm::dot(old_player_up, normal), w.x, w.y, w.z
+			)
+	);
+
+	player_forward = orientation_change * player_forward ;
+
+	player_forward = glm::normalize(player_forward - normal * glm::dot(normal, player_forward));
+	player_right = glm::cross(player_forward, normal);
+
+	auto q = glm::quat_cast(glm::mat3(
+			player_right, normal, -player_forward
+	));
+
+	camera->transform->rotation = q;
+
 	spot->transform->rotation = camera->transform->rotation;
 	spot->transform->position.x = camera->transform->position.x;
 	spot->transform->position.y = camera->transform->position.y;
-	spot->transform->position.z = camera->transform->position.z - 0.5f;
+	spot->transform->position.z = camera->transform->position.z - 0.75f;
+
+	for (auto spider : spiders) {
+		spider->update(elapsed);
+		if (glm::distance(
+				glm::vec2(spider->transform->position.x, spider->transform->position.y),
+				glm::vec2(camera->transform->position.x, camera->transform->position.y)) < 0.5) {
+		    std::cerr << "GAME OVER" << std::endl;
+		    game_over = true;
+		}
+	}
+
+	if (glm::distance(
+			glm::vec2(statue->position.x, statue->position.y),
+			glm::vec2(camera->transform->position.x, camera->transform->position.y)
+			) < 0.5) {
+		win = true;
+	}
 }
 
 //GameMode will render to some offscreen framebuffer(s).
@@ -418,12 +476,13 @@ struct Framebuffers {
 	}
 } fbs;
 
+
 void GameMode::draw(glm::uvec2 const &drawable_size) {
 	fbs.allocate(drawable_size, glm::uvec2(1024, 1024));
 
 	//Draw scene to shadow map for spotlight:
 	glBindFramebuffer(GL_FRAMEBUFFER, fbs.shadow_fb);
-	glViewport(0,0,fbs.shadow_size.x, fbs.shadow_size.y);
+	glViewport(0, 0, fbs.shadow_size.x, fbs.shadow_size.y);
 
 	glClearColor(1.0f, 0.0f, 1.0f, 0.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
@@ -443,10 +502,9 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 	GL_ERRORS();
 
 
-
 	//Draw scene to off-screen framebuffer:
 	glBindFramebuffer(GL_FRAMEBUFFER, fbs.fb);
-	glViewport(0,0,drawable_size.x, drawable_size.y);
+	glViewport(0, 0, drawable_size.x, drawable_size.y);
 
 	camera->aspect = drawable_size.x / float(drawable_size.y);
 
@@ -494,9 +552,8 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 //		glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
 //		glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
 //	}
-
 	{
-	    for (int i = 0; i < 2; i++) {
+	    for (int i = 0; i < 12; i++) {
 	    	Scene::Lamp* spot = spot_lights[i];
 			glm::mat4 world_to_spot =
 							  //This matrix converts from the spotlight's clip space ([-1,1]^3) into depth map texture coordinates ([0,1]^2) and depth map Z values ([0,1]):
@@ -523,7 +580,7 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 			glUniform3fv(spot_direction, 1, glm::value_ptr(-glm::vec3(spot_to_world[2])));
 			glUniform3fv(texture_program->spot_color_vec3, 1, glm::value_ptr(glm::vec3(1.0f, 1.0f, 1.0f)));
 
-			glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.5f * spot->fov), std::cos(0.85f * 0.5f * spot->fov));
+			glm::vec2 spot_outer_inner = glm::vec2(std::cos(0.4f * spot->fov), std::cos(0.85f * 0.4f * spot->fov));
 			glUniform2fv(texture_program->spot_outer_inner_vec2, 1, glm::value_ptr(spot_outer_inner));
 		}
 	}
@@ -549,6 +606,19 @@ void GameMode::draw(glm::uvec2 const &drawable_size) {
 
 	GL_ERRORS();
 
+	if (game_over) {
+		std::string c = "GAME OVER";
+		float height = 0.1f;
+		float width = text_width(c, height);
+		draw_text(c, glm::vec2(0.15f - (width + 0.02), 0.15f), height, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
+	}
+
+	if (win) {
+		std::string c = "YOU WIN";
+		float height = 0.1f;
+		float width = text_width(c, height);
+		draw_text(c, glm::vec2(0.15f - (width + 0.02), 0.00f), height, glm::vec4(0.0f, 1.0f, 0.0f, 1.0f));
+	}
 
 	//Copy scene from color buffer to screen, performing post-processing effects:
 	glActiveTexture(GL_TEXTURE0);

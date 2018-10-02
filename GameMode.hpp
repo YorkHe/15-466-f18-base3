@@ -43,6 +43,6 @@ struct GameMode : public Mode {
 	WalkMesh* walk_mesh;
 	WalkMesh::WalkPoint walk_point;
 
-	float elevation = 0.0f;
-
+	bool game_over = false;
+	bool win = false;
 };

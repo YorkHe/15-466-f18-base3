@@ -1,11 +1,11 @@
 # Game Information
 (Note: fill in this portion with information about your game.)
 
-Title: (TODO: your game's title)
+Title: Terrierstein
 
-Author: (TODO: your name)
+Author: Yu He
 
-Design Document: [TODO: name of design document](TODO: link to design document)
+Design Document: [Maze Escape](http://graphics.cs.cmu.edu/courses/15-466-f18/game3-designs/clavicka/)
 
 Screen Shot:
 
@@ -13,15 +13,19 @@ Screen Shot:
 
 How To Play:
 
-TODO: describe the controls and (if needed) goals/strategy.
+Use W/A/S/D to move. You can do nothing but run. 
+
+> Run, You Fools! 
+
+And yes, you have to dodge the spiders, but the spot lights are your friends. 
 
 Changes From The Design Document:
 
-TODO: what did you need to add/remove/modify from the original design? Why?
+I changed the game to be a first-person-running game. I was planning to add more features like shooting and sound effects, but sadly I did't have much time for those. 
 
 Good / Bad / Ugly Code:
 
-TODO: provide examples of code you wrote from this project that you think is good (elegant, simple, useful), bad (hack-y, brittle, unreadable), and ugly (particularly inelegant). Provide a sentence or two of justification for the examples.
+The light arrays are kinds of ugly. I can't declare a variable-length array in shader program, so the (maximum) number of light source in the scene has to be fixed.  
 
 # Changes In This Base Code
 
